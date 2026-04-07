@@ -4,6 +4,85 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>TTT Invoice Creator</title>
+<script src="https://accounts.google.com/gsi/client" async defer>
+// ── GOOGLE DRIVE ──
+var driveToken = null;
+var lastInvNum = null; // stores inv number at time of generation
+
+function showDriveSetup() {
+  var s = document.getElementById('drive-setup');
+  s.style.display = s.style.display === 'none' ? 'block' : 'none';
+  var saved = localStorage.getItem('g-client-id') || '';
+  document.getElementById('g-client-id').value = saved;
+}
+
+function saveDriveSetup() {
+  var id = document.getElementById('g-client-id').value.trim();
+  if (!id) { alert('Please enter a Client ID'); return; }
+  localStorage.setItem('g-client-id', id);
+  document.getElementById('drive-setup').style.display = 'none';
+  setDriveStatus('Client ID saved. Click Save to Drive to test.');
+}
+
+function setDriveStatus(msg, color) {
+  var el = document.getElementById('drive-status');
+  if (el) { el.textContent = msg; el.style.color = color || '#666'; }
+}
+
+function saveToDrive() {
+  var clientId = localStorage.getItem('g-client-id');
+  if (!clientId) {
+    showDriveSetup();
+    setDriveStatus('Please set up your Client ID first.', '#c0392b');
+    return;
+  }
+  if (typeof google === 'undefined' || !google.accounts) {
+    setDriveStatus('Google API not loaded. Check your internet connection.', '#c0392b');
+    return;
+  }
+  setDriveStatus('Signing in...');
+  try {
+    var tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: function(resp) {
+        if (resp.error) {
+          setDriveStatus('Sign-in failed: ' + resp.error, '#c0392b');
+          return;
+        }
+        driveToken = resp.access_token;
+        uploadToDrive();
+      }
+    });
+    tokenClient.requestAccessToken({prompt: ''});
+  } catch(e) {
+    setDriveStatus('Error: ' + e.message, '#c0392b');
+  }
+}
+
+function uploadToDrive() {
+  setDriveStatus('Uploading...');
+  var invNum = lastInvNum || document.getElementById('inv-num').value || 'Invoice';
+  var content = '<!DOCTYPE html><html><head><meta charset="UTF-8"/><style>body{font-family:Calibri,Arial,sans-serif}</style></head><body>' + document.getElementById('inv-out').innerHTML + '</body></html>';
+  var fileName = invNum + '.html';
+  var meta = JSON.stringify({name: fileName, mimeType: 'text/html'});
+  var body = '--foo\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n--foo\r\nContent-Type: text/html\r\n\r\n' + content + '\r\n--foo--';
+  fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + driveToken, 'Content-Type': 'multipart/related; boundary=foo' },
+    body: body
+  }).then(function(r){ return r.json(); }).then(function(data){
+    if (data.id) {
+      setDriveStatus('Saved: ' + fileName + ' ✓', '#2e7d32');
+    } else {
+      setDriveStatus('Upload failed: ' + JSON.stringify(data.error), '#c0392b');
+    }
+  }).catch(function(e){
+    setDriveStatus('Error: ' + e.message, '#c0392b');
+  });
+}
+
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Carlito:wght@400;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -60,7 +139,25 @@ body{font-family:Calibri,Carlito,sans-serif;background:#f5f4f0;color:#111;min-he
 .inv-due{display:flex;justify-content:space-between;padding:10px 12px;background:#FFE500;font-weight:800;font-size:16px;margin-top:4px;border-radius:3px}
 .inv-ft{font-size:12.5px;line-height:2;color:#333;padding-top:1.5rem}
 .inv-ft-co{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
-@media print{.hdr,.btn-p,.btn-s,.sync,.pa{display:none!important}#preview{display:block!important}#form-view{display:none!important}.inv{border:none;padding:0}.inv-body{padding:0 1rem}.app{padding:0;max-width:100%}}
+@page{size:A4 portrait;margin:1.2cm 1.5cm}
+@media print{
+  .hdr,.btn-p,.btn-s,.sync,.pa,.drive-bar{display:none!important}
+  #preview{display:block!important}
+  #form-view{display:none!important}
+  .app{padding:0;max-width:100%}
+  .inv{border:none;border-radius:0;padding:0;margin:0}
+  .inv-body{padding:0 1.5cm}
+  .inv-top{flex-direction:row!important;align-items:flex-start!important}
+  .inv-logo{margin-left:1rem!important}
+  .inv-logo img{width:160px!important}
+  .inv-parties{grid-template-columns:1fr 1fr!important}
+  .inv-tw{justify-content:flex-end!important}
+  .inv-tt{width:320px!important}
+  .inv-tbl{font-size:11.5px}
+  .inv-h{font-size:34px}
+  .inv-co-name{font-size:22px}
+  body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
 @media(max-width:500px){.row2{grid-template-columns:1fr}.tot-wrap{width:100%}.inv-body{padding:0 1rem}.inv-top{flex-direction:column;gap:1rem}.inv-logo img{width:130px}.inv-parties{grid-template-columns:1fr}.inv-tw{justify-content:flex-start}.inv-tt{width:100%}}
 </style>
 </head>
@@ -101,6 +198,18 @@ body{font-family:Calibri,Carlito,sans-serif;background:#f5f4f0;color:#111;min-he
     <div class="pa" style="display:flex;gap:8px;margin-bottom:.875rem">
       <button class="btn-s" style="margin:0" onclick="backToForm()">Edit invoice</button>
       <button class="btn-p" style="margin:0" onclick="window.print()">Print / Save PDF</button>
+    </div>
+    <div class="drive-bar" style="background:#fff;border:1px solid #e0ddd6;border-radius:10px;padding:.875rem 1.25rem;margin-bottom:.875rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px;color:#444;flex:1">Save to Google Drive</span>
+      <span id="drive-status" style="font-size:12px;color:#666"></span>
+      <button class="btn-s" style="margin:0;width:auto;padding:8px 16px;font-size:13px" onclick="saveToDrive()">Save to Drive</button>
+      <button class="btn-s" style="margin:0;width:auto;padding:8px 16px;font-size:13px;color:#999" onclick="showDriveSetup()">Setup</button>
+    </div>
+    <div id="drive-setup" style="display:none;background:#fff;border:1px solid #e0ddd6;border-radius:10px;padding:1rem 1.25rem;margin-bottom:.875rem">
+      <p style="font-size:13px;font-weight:600;margin-bottom:.5rem">Google Drive Setup</p>
+      <p style="font-size:12px;color:#666;margin-bottom:.75rem">Enter your Google OAuth Client ID. <a href="https://console.cloud.google.com/" target="_blank" style="color:#c8a84b">Get one here</a> — create a project, enable Drive API, create OAuth Web Client credentials, and add your site URL as an authorised origin.</p>
+      <div class="f" style="margin-bottom:.75rem"><label>Client ID</label><input id="g-client-id" type="text" placeholder="xxxx.apps.googleusercontent.com" style="font-size:14px"/></div>
+      <button class="btn-p" style="padding:10px" onclick="saveDriveSetup()">Save Client ID</button>
     </div>
     <div class="inv" id="inv-out"></div>
     <div class="pa" style="margin-top:.875rem"><button class="btn-p" onclick="window.print()">Print / Save PDF</button></div>
@@ -213,6 +322,7 @@ function generateInvoice() {
     '<div class="inv-tr"><span>GST</span><span>' + fmt(gst) + '</span></div>' +
     '<div class="inv-due"><span>Amount Due</span><span>' + fmt(total) + '</span></div></div></div>' +
     '<div class="inv-ft"><div class="inv-ft-co">' + CO_NAME + '</div>' + PAYMENT + '</div></div>';
+  lastInvNum = invNum;
   var n = parseInt(invNum.replace(/\D/g,''),10) || nextNum;
   nextNum = n + 1;
   try { localStorage.setItem('ttt-inv',String(nextNum)); } catch(e){}
@@ -233,6 +343,84 @@ function backToForm() {
   document.getElementById('sync-note').textContent = 'Ready';
   renderItems();
 })();
+
+
+// ── GOOGLE DRIVE ──
+var driveToken = null;
+var lastInvNum = null; // stores inv number at time of generation
+
+function showDriveSetup() {
+  var s = document.getElementById('drive-setup');
+  s.style.display = s.style.display === 'none' ? 'block' : 'none';
+  var saved = localStorage.getItem('g-client-id') || '';
+  document.getElementById('g-client-id').value = saved;
+}
+
+function saveDriveSetup() {
+  var id = document.getElementById('g-client-id').value.trim();
+  if (!id) { alert('Please enter a Client ID'); return; }
+  localStorage.setItem('g-client-id', id);
+  document.getElementById('drive-setup').style.display = 'none';
+  setDriveStatus('Client ID saved. Click Save to Drive to test.');
+}
+
+function setDriveStatus(msg, color) {
+  var el = document.getElementById('drive-status');
+  if (el) { el.textContent = msg; el.style.color = color || '#666'; }
+}
+
+function saveToDrive() {
+  var clientId = localStorage.getItem('g-client-id');
+  if (!clientId) {
+    showDriveSetup();
+    setDriveStatus('Please set up your Client ID first.', '#c0392b');
+    return;
+  }
+  if (typeof google === 'undefined' || !google.accounts) {
+    setDriveStatus('Google API not loaded. Check your internet connection.', '#c0392b');
+    return;
+  }
+  setDriveStatus('Signing in...');
+  try {
+    var tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: function(resp) {
+        if (resp.error) {
+          setDriveStatus('Sign-in failed: ' + resp.error, '#c0392b');
+          return;
+        }
+        driveToken = resp.access_token;
+        uploadToDrive();
+      }
+    });
+    tokenClient.requestAccessToken({prompt: ''});
+  } catch(e) {
+    setDriveStatus('Error: ' + e.message, '#c0392b');
+  }
+}
+
+function uploadToDrive() {
+  setDriveStatus('Uploading...');
+  var invNum = lastInvNum || document.getElementById('inv-num').value || 'Invoice';
+  var content = '<!DOCTYPE html><html><head><meta charset="UTF-8"/><style>body{font-family:Calibri,Arial,sans-serif}</style></head><body>' + document.getElementById('inv-out').innerHTML + '</body></html>';
+  var fileName = invNum + '.html';
+  var meta = JSON.stringify({name: fileName, mimeType: 'text/html'});
+  var body = '--foo\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n--foo\r\nContent-Type: text/html\r\n\r\n' + content + '\r\n--foo--';
+  fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + driveToken, 'Content-Type': 'multipart/related; boundary=foo' },
+    body: body
+  }).then(function(r){ return r.json(); }).then(function(data){
+    if (data.id) {
+      setDriveStatus('Saved: ' + fileName + ' ✓', '#2e7d32');
+    } else {
+      setDriveStatus('Upload failed: ' + JSON.stringify(data.error), '#c0392b');
+    }
+  }).catch(function(e){
+    setDriveStatus('Error: ' + e.message, '#c0392b');
+  });
+}
 
 </script>
 </body>
