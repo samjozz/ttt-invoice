@@ -10,7 +10,8 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Calibri,Carlito,sans-serif;background:#f5f4f0;color:#111;min-height:100vh}
-.app{max-width:680px;margin:0 auto;padding:1rem 1rem 3rem}
+.app{max-width:980px;margin:0 auto;padding:1rem 1rem 3rem}
+#form-view{max-width:680px;margin:0 auto}
 .hdr{display:flex;align-items:center;gap:12px;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid #e0ddd6}
 .hdr img{width:54px;height:54px;object-fit:contain}
 .hdr h1{font-size:17px;font-weight:700}
@@ -39,7 +40,9 @@ body{font-family:Calibri,Carlito,sans-serif;background:#f5f4f0;color:#111;min-he
 .btn-s{display:block;width:100%;padding:10px;background:#fff;color:#666;border:1px solid #c0bdb6;border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit;margin-bottom:.75rem}
 .sync{font-size:11px;color:#999;text-align:center;padding:6px 0 10px}
 #preview{display:none}
-.inv{background:#fff;font-family:Calibri,Carlito,sans-serif;padding:0 0 2rem;border:1px solid #ddd;border-radius:10px;overflow:hidden;margin-bottom:1rem}
+.preview-shell{background:#ece8df;border:1px solid #e0ddd6;border-radius:10px;padding:12px;margin-bottom:1rem;overflow:hidden;display:flex;justify-content:center;align-items:flex-start}
+.preview-stage{width:794px;max-width:none;margin:0;transform-origin:top left;will-change:transform}
+.inv{background:#fff;font-family:Calibri,Carlito,sans-serif;padding:0 0 2rem;border:1px solid #ddd;border-radius:10px;overflow:hidden;margin:0;box-shadow:0 2px 12px rgba(0,0,0,.06)}
 .inv-bar{height:10px;background:#c8a84b;margin-bottom:2rem}
 .inv-body{padding:0 2.5rem}
 .inv-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2rem}
@@ -64,16 +67,34 @@ body{font-family:Calibri,Carlito,sans-serif;background:#f5f4f0;color:#111;min-he
 .inv-ft{font-size:12.5px;line-height:2;color:#333;padding-top:1.5rem;page-break-inside:avoid;break-inside:avoid}
 .inv-ft-co{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
 .inv-tw,.inv-tt,.inv-due{page-break-inside:avoid;break-inside:avoid}
+.pdf-export-wrap{position:fixed;left:-99999px;top:0;width:794px;background:#fff;z-index:-1;visibility:hidden}
+.pdf-export-wrap .inv{width:794px!important;max-width:794px!important;border:none!important;border-radius:0!important;box-shadow:none!important;margin:0!important;overflow:visible!important;padding:0 0 2rem!important;background:#fff!important}
+.pdf-export-wrap .inv-bar{height:8px!important;margin-bottom:1.2rem!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+.pdf-export-wrap .inv-body{padding:0 2.5rem!important}
+.pdf-export-wrap .inv-top{display:flex!important;flex-direction:row!important;justify-content:space-between!important;align-items:flex-start!important;margin-bottom:1.2rem!important}
+.pdf-export-wrap .inv-co-name{font-size:19px!important;margin-bottom:5px!important}
+.pdf-export-wrap .inv-co-det{font-size:10.5px!important;line-height:1.65!important}
+.pdf-export-wrap .inv-logo{flex-shrink:0!important;margin-left:1rem!important}
+.pdf-export-wrap .inv-logo img{width:155px!important;height:auto!important;display:block!important}
+.pdf-export-wrap .inv-h{font-size:30px!important;margin-bottom:2px!important}
+.pdf-export-wrap .inv-dt{font-size:11px!important;margin-bottom:1rem!important}
+.pdf-export-wrap .inv-parties{display:grid!important;grid-template-columns:1fr 1fr!important;gap:1rem!important;margin-bottom:1rem!important}
+.pdf-export-wrap .inv-pl{font-size:10.5px!important;margin-bottom:3px!important}
+.pdf-export-wrap .inv-pv{font-size:11px!important;line-height:1.55!important}
+.pdf-export-wrap .inv-tbl{font-size:10.5px!important;margin-bottom:0.8rem!important}
+.pdf-export-wrap .inv-tbl th{padding:7px 6px!important;font-size:10.5px!important}
+.pdf-export-wrap .inv-tbl td{padding:8px 6px!important}
+.pdf-export-wrap .inv-tw{display:flex!important;justify-content:flex-end!important;margin-bottom:0.8rem!important;page-break-inside:avoid!important;break-inside:avoid!important}
+.pdf-export-wrap .inv-tt{width:270px!important;font-size:11px!important}
+.pdf-export-wrap .inv-tr{padding:4px 0!important}
+.pdf-export-wrap .inv-due{padding:7px 10px!important;font-size:13px!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+.pdf-export-wrap .inv-ft{font-size:10.5px!important;line-height:1.8!important;padding-top:0.6rem!important;page-break-inside:avoid!important;break-inside:avoid!important}
+.pdf-export-wrap .inv-ft-co{font-size:11px!important}
 /* ── MOBILE ── */
 @media(max-width:500px){
   .row2{grid-template-columns:1fr}
   .tot-wrap{width:100%}
-  .inv-body{padding:0 1rem}
-  .inv-top{flex-direction:column;gap:1rem}
-  .inv-logo img{width:130px}
-  .inv-parties{grid-template-columns:1fr}
-  .inv-tw{justify-content:flex-start}
-  .inv-tt{width:100%}
+  .preview-shell{padding:8px}
 }
 /* ── PRINT — must come last to override mobile ── */
 @page{size:A4 portrait;margin:0.8cm 1.2cm}
@@ -83,7 +104,8 @@ body{font-family:Calibri,Carlito,sans-serif;background:#f5f4f0;color:#111;min-he
   #form-view{display:none!important}
   html,body{width:100%;margin:0;padding:0;background:#fff}
   .app{padding:0;max-width:100%;width:100%}
-  .inv{border:none!important;border-radius:0!important;padding:0!important;margin:0!important;overflow:visible!important}
+  .preview-shell,.preview-stage{background:transparent!important;border:none!important;border-radius:0!important;padding:0!important;margin:0!important;overflow:visible!important;box-shadow:none!important;transform:none!important;width:100%!important;height:auto!important}
+  .inv{border:none!important;border-radius:0!important;padding:0!important;margin:0!important;overflow:visible!important;box-shadow:none!important}
   .inv-bar{height:8px!important;margin-bottom:1.2rem!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   .inv-body{padding:0!important}
   .inv-top{display:flex!important;flex-direction:row!important;justify-content:space-between!important;align-items:flex-start!important;margin-bottom:1.2rem!important}
@@ -144,8 +166,9 @@ body{font-family:Calibri,Carlito,sans-serif;background:#f5f4f0;color:#111;min-he
     <button class="btn-p" onclick="generateInvoice()">Preview invoice</button>
   </div>
   <div id="preview">
-    <div class="pa" style="display:flex;gap:8px;margin-bottom:.875rem">
+    <div class="pa" style="display:flex;gap:8px;margin-bottom:.875rem;flex-wrap:wrap">
       <button class="btn-s" style="margin:0" onclick="backToForm()">Edit invoice</button>
+      <button class="btn-s" style="margin:0" onclick="printInvoice()">Print</button>
       <button class="btn-p" style="margin:0" onclick="downloadPdf()">Download PDF</button>
     </div>
     <div class="drive-bar" style="background:#fff;border:1px solid #e0ddd6;border-radius:10px;padding:.875rem 1.25rem;margin-bottom:.875rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -160,7 +183,7 @@ body{font-family:Calibri,Carlito,sans-serif;background:#f5f4f0;color:#111;min-he
       <div class="f" style="margin-bottom:.75rem"><label>Client ID</label><input id="g-client-id" type="text" placeholder="xxxx.apps.googleusercontent.com" style="font-size:14px"/></div>
       <button class="btn-p" style="padding:10px" onclick="saveDriveSetup()">Save Client ID</button>
     </div>
-    <div class="inv" id="inv-out"></div>
+    <div class="preview-shell"><div class="preview-stage" id="preview-stage"><div class="inv" id="inv-out"></div></div></div>
     <div class="pa" style="margin-top:.875rem"><button class="btn-p" onclick="downloadPdf()">Download PDF</button></div>
   </div>
 </div>
@@ -280,12 +303,18 @@ function generateInvoice() {
   document.getElementById('inv-num').value = 'INV-' + String(nextNum).padStart(4,'0');
   document.getElementById('form-view').style.display = 'none';
   document.getElementById('preview').style.display = 'block';
+  requestAnimationFrame(function(){ fitPreviewStage(); });
   window.scrollTo(0,0);
 }
 function backToForm() {
   document.getElementById('preview').style.display = 'none';
   document.getElementById('form-view').style.display = 'block';
+  requestAnimationFrame(function(){ fitPreviewStage(); });
   window.scrollTo(0,0);
+}
+
+function printInvoice() {
+  window.print();
 }
 
 function downloadPdf() {
@@ -300,31 +329,37 @@ function downloadPdf() {
   }
 
   var invNum = (lastInvNum || document.getElementById('inv-num').value || 'invoice').replace(/[^a-zA-Z0-9-_]/g, '_');
-  var clone = invoice.cloneNode(true);
-  clone.style.border = 'none';
-  clone.style.borderRadius = '0';
-  clone.style.margin = '0';
-  clone.style.width = '794px';
-  clone.style.maxWidth = '794px';
-  clone.style.background = '#fff';
-  clone.style.boxSizing = 'border-box';
+  var exportWrap = document.createElement('div');
+  exportWrap.className = 'pdf-export-wrap';
 
-  var wrap = document.createElement('div');
-  wrap.style.background = '#fff';
-  wrap.style.padding = '0';
-  wrap.style.margin = '0';
-  wrap.appendChild(clone);
+  var clone = invoice.cloneNode(true);
+  exportWrap.appendChild(clone);
+  document.body.appendChild(exportWrap);
 
   var opt = {
-    margin: [8, 10, 8, 10],
+    margin: 0,
     filename: invNum + '.pdf',
     image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollY: 0 },
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      width: 794,
+      windowWidth: 794,
+      scrollX: 0,
+      scrollY: 0
+    },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    pagebreak: { mode: ['css', 'legacy'] }
   };
 
-  html2pdf().set(opt).from(wrap).save();
+  html2pdf().set(opt).from(clone).save().then(function() {
+    exportWrap.remove();
+  }).catch(function(err) {
+    exportWrap.remove();
+    console.error(err);
+    alert('Could not generate the PDF cleanly. Please try the Print button instead.');
+  });
 }
 (function(){
   var t = new Date(), p = function(n){ return ('0'+n).slice(-2); };
@@ -332,18 +367,42 @@ function downloadPdf() {
   try { var s = localStorage.getItem('ttt-inv'); if(s){ nextNum=parseInt(s,10); document.getElementById('inv-num').value='INV-'+String(nextNum).padStart(4,'0'); } } catch(e){}
   document.getElementById('sync-note').textContent = 'Ready';
   renderItems();
+  setTimeout(fitPreviewStage,0);
 })();
 
 
 
-// Auto-scale invoice to fit one page on print
+function fitPreviewStage() {
+  var shell = document.querySelector('.preview-shell');
+  var stage = document.getElementById('preview-stage');
+  var invoice = document.getElementById('inv-out');
+  if (!shell || !stage || !invoice) return;
+  if (window.matchMedia('print').matches) {
+    stage.style.transform = '';
+    stage.style.height = '';
+    stage.style.width = '100%';
+    return;
+  }
+  var shellStyles = window.getComputedStyle(shell);
+  var availableWidth = shell.clientWidth - parseFloat(shellStyles.paddingLeft) - parseFloat(shellStyles.paddingRight);
+  var baseWidth = 794;
+  var scale = Math.min(1, availableWidth / baseWidth);
+  if (!isFinite(scale) || scale <= 0) scale = 1;
+  stage.style.width = baseWidth + 'px';
+  stage.style.transform = 'scale(' + scale + ')';
+  stage.style.height = (invoice.offsetHeight * scale) + 'px';
+}
+window.addEventListener('resize', fitPreviewStage);
+
 window.addEventListener('beforeprint', function() {
-  var inv = document.getElementById('inv-out');
-  if (!inv) return;
-  inv.style.transform = '';
-  inv.style.width = '';
-  // Small delay to let browser compute layout
+  var stage = document.getElementById('preview-stage');
+  if (stage) {
+    stage.style.transform = '';
+    stage.style.height = '';
+    stage.style.width = '100%';
+  }
 });
+window.addEventListener('afterprint', fitPreviewStage);
 
 // ── GOOGLE DRIVE ──
 var driveToken = null;
