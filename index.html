@@ -121,6 +121,10 @@ body{font-family:Calibri,Carlito,sans-serif;background:#f5f4f0;color:#111;min-he
         <div class="f"><label>Invoice #</label><input id="inv-num" type="text" value="INV-0228"/></div>
         <div class="f"><label>Date</label><input id="inv-date" type="date"/></div>
       </div>
+      <div class="f"><label>Payment account</label><select id="bank-select" style="display:block;width:100%;padding:11px 12px;font-size:16px;border:1px solid #e0ddd6;border-radius:6px;background:#fafaf8;color:#111;font-family:inherit;-webkit-appearance:none">
+        <option value="anz">ANZ — BSB 012-345 / Acc 812215111</option>
+        <option value="nab">NAB — BSB 082-356 / Acc 985560140</option>
+      </select></div>
     </div>
     <div class="card">
       <div class="ctitle">Bill to</div>
@@ -183,7 +187,11 @@ var CO_NAME  = 'TELL THE TIME CO.';
 var CO_LEGAL = 'Tell The World Pty Ltd T/A Tell The Time Co.';
 var CO_ADDR  = 'Suite 10.14/185 Elizabeth Street<br>Sydney, New South Wales, 2000';
 var CO_ABN   = 'ABN 59 678 413 128';
-var PAYMENT  = 'Bank: Westpac<br>BSB: 032-257<br>Account Number: 706443<br>PayID ABN: 59 678 413 128';
+var BANKS = {
+  anz: 'Bank: ANZ<br>Account Name: Tell the World Pty Ltd<br>BSB: 012-345<br>Account Number: 812215111',
+  nab: 'Bank: NAB<br>Account Name: Tell the World Pty Ltd<br>BSB: 082-356<br>Account Number: 985560140'
+};
+function getPayment() { var b = document.getElementById('bank-select'); return BANKS[b ? b.value : 'anz']; }
 
 function upd(idx, fieldId, val) {
   items[idx][FIELDS[fieldId]] = val;
@@ -286,7 +294,7 @@ function generateInvoice() {
     '<div class="inv-due"><span>Amount Due</span><span>' + fmt(Math.max(0, total - depositAmt - paidAmt)) + '</span></div>' +
     (payStatus !== 'unpaid' ? '<div style="text-align:center;padding:0.75rem 0 0"><span class="pay-stamp ' + (payStatus==='paid'?'stamp-paid':'stamp-deposit') + '">' + (payStatus==='paid'?'PAID':'DEPOSIT TAKEN') + '</span></div>' : '') +
     '</div></div>' +
-    '<div class="inv-ft"><div class="inv-ft-co">' + CO_NAME + '</div>' + PAYMENT + '</div></div>';
+    '<div class="inv-ft"><div class="inv-ft-co">' + CO_NAME + '</div>' + getPayment() + '</div></div>';
   lastInvNum = invNum;
   lastInvNum = invNum;
   lastInvNum = invNum;
