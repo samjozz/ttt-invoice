@@ -172,7 +172,7 @@ body{font-family:Calibri,Carlito,sans-serif;background:#f5f4f0;color:#111;min-he
     </div>
     <div id="drive-setup" style="display:none;background:#fff;border:1px solid #e0ddd6;border-radius:10px;padding:1rem 1.25rem;margin-bottom:.875rem">
       <p style="font-size:13px;font-weight:600;margin-bottom:.5rem">Google Drive Setup</p>
-      <p style="font-size:12px;color:#666;margin-bottom:.75rem">Enter your Google OAuth Client ID. <a href="https://console.cloud.google.com/" target="_blank" style="color:#c8a84b">Get one from Google Cloud Console</a> — create a project, enable Drive API, create OAuth 2.0 Web Client credentials, and add your GitHub Pages URL as an authorised JavaScript origin.</p>
+      <p style="font-size:12px;color:#666;margin-bottom:.75rem">Enter your Google OAuth Client ID. <a href="https://console.cloud.google.com/" target="_blank" style="color:#c8a84b">Get one from Google Cloud Console</a> — create a project, enable Drive API <strong>and Google Sheets API</strong>, create OAuth 2.0 Web Client credentials, and add your GitHub Pages URL as an authorised JavaScript origin. Make sure your Google Sheet is shared with your Google account.</p>
       <div class="f" style="margin-bottom:.75rem"><label>Client ID</label><input id="g-client-id" type="text" placeholder="xxxx.apps.googleusercontent.com" style="font-size:14px"/></div>
       <button class="btn-p" style="padding:10px" onclick="saveDriveSetup()">Save Client ID</button>
     </div>
@@ -306,6 +306,7 @@ function generateInvoice() {
   setPayStatus('unpaid');
   document.getElementById('form-view').style.display = 'none';
   document.getElementById('preview').style.display = 'block';
+  logToSheet();
   window.scrollTo(0,0);
 }
 function backToForm() {
@@ -441,10 +442,33 @@ function setPayStatus(status) {
   if (ex) ex.remove();
 }
 
-// ── GOOGLE DRIVE ──
+// ── GOOGLE DRIVE + SHEETS ──
 var driveToken = null;
-var lastInvNum = null; // stores inv number at time of generation
+var lastInvNum = null;
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyaWllW_FzXtI9lokNLWeyozVjGbxczKMODbKFW0R5O5nMDjaRZo74VvERDOUHahy-m/exec';
 
+function logToSheet() {
+  var invNum   = lastInvNum || document.getElementById('inv-num').value;
+  var date     = document.getElementById('inv-date').value;
+  var customer = document.getElementById('cust-name').value;
+  var total = 0;
+  for (var i = 0; i < items.length; i++) total += (parseFloat(items[i].qty)||1)*(parseFloat(items[i].price)||0);
+  var gst     = total - total/1.1;
+  var depAmt  = payStatus==='deposit' ? (parseFloat(document.getElementById('deposit-amt').value)||0) : 0;
+  var paidAmt = payStatus==='paid'    ? (parseFloat(document.getElementById('paid-amt').value)||total) : 0;
+  var amtDue  = Math.max(0, total - depAmt - paidAmt);
+  var status  = payStatus==='paid'?'Paid in Full':payStatus==='deposit'?'Deposit Taken':'Unpaid';
+  var bank    = (document.getElementById('bank-select').value||'').toUpperCase();
+  var ts      = new Date().toLocaleString('en-AU');
+  var row     = [invNum, date, customer, total.toFixed(2), gst.toFixed(2), depAmt||'', paidAmt||'', amtDue.toFixed(2), status, bank, ts];
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    body: JSON.stringify({row: row}),
+    headers: {'Content-Type': 'application/json'}
+  }).then(function(){ setDriveStatus('Logged to Sheet \u2713', '#2e7d32'); }
+  ).catch(function(e){ setDriveStatus('Sheet error: '+e.message, '#c0392b'); });
+}
 function showDriveSetup() {
   var s = document.getElementById('drive-setup');
   s.style.display = s.style.display === 'none' ? 'block' : 'none';
@@ -501,15 +525,30 @@ function uploadToDrive() {
   var invNum = lastInvNum || document.getElementById('inv-num').value || 'Invoice';
   var content = '<!DOCTYPE html><html><head><meta charset="UTF-8"/><style>body{font-family:Calibri,Arial,sans-serif}</style></head><body>' + document.getElementById('inv-out').innerHTML + '</body></html>';
   var fileName = invNum + '.html';
-  var meta = JSON.stringify({name: fileName, mimeType: 'text/html'});
-  var body = '--foo\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n--foo\r\nContent-Type: text/html\r\n\r\n' + content + '\r\n--foo--';
-  fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + driveToken, 'Content-Type': 'multipart/related; boundary=foo' },
-    body: body
+  // First search for existing file with same name
+  fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22'+encodeURIComponent(fileName)+'%22+and+trashed%3Dfalse&fields=files(id,name)', {
+    headers: {'Authorization': 'Bearer ' + driveToken}
+  }).then(function(r){ return r.json(); }).then(function(data){
+    var existingId = data.files && data.files.length > 0 ? data.files[0].id : null;
+    var url, method;
+    var body = '--foo\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify({name: fileName, mimeType: 'text/html'}) + '\r\n--foo\r\nContent-Type: text/html\r\n\r\n' + content + '\r\n--foo--';
+    if (existingId) {
+      // Overwrite existing file
+      url = 'https://www.googleapis.com/upload/drive/v3/files/' + existingId + '?uploadType=multipart';
+      method = 'PATCH';
+    } else {
+      // Create new file
+      url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+      method = 'POST';
+    }
+    return fetch(url, {
+      method: method,
+      headers: {'Authorization': 'Bearer ' + driveToken, 'Content-Type': 'multipart/related; boundary=foo'},
+      body: body
+    });
   }).then(function(r){ return r.json(); }).then(function(data){
     if (data.id) {
-      setDriveStatus('Saved: ' + fileName + ' ✓', '#2e7d32');
+      setDriveStatus('Saved: ' + fileName + ' \u2713', '#2e7d32');
     } else {
       setDriveStatus('Upload failed: ' + JSON.stringify(data.error), '#c0392b');
     }
