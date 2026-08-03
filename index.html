@@ -306,7 +306,6 @@ function generateInvoice() {
   setPayStatus('unpaid');
   document.getElementById('form-view').style.display = 'none';
   document.getElementById('preview').style.display = 'block';
-  logToSheet();
   window.scrollTo(0,0);
 }
 function backToForm() {
@@ -490,82 +489,36 @@ function setDriveStatus(msg, color) {
 }
 
 function saveToDrive() {
-  var clientId = localStorage.getItem('g-client-id');
-  if (!clientId) {
-    showDriveSetup();
-    setDriveStatus('Please set up your Client ID first.', '#c0392b');
-    return;
-  }
-  if (typeof google === 'undefined' || !google.accounts) {
-    setDriveStatus('Google API not loaded. Check your internet connection.', '#c0392b');
-    return;
-  }
-  setDriveStatus('Signing in...');
-  try {
-    var tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: 'https://www.googleapis.com/auth/drive.file',
-      callback: function(resp) {
-        if (resp.error) {
-          setDriveStatus('Sign-in failed: ' + resp.error, '#c0392b');
-          return;
-        }
-        driveToken = resp.access_token;
-        uploadToDrive();
-      }
-    });
-    tokenClient.requestAccessToken({prompt: ''});
-  } catch(e) {
-    setDriveStatus('Error: ' + e.message, '#c0392b');
-  }
-}
+  setDriveStatus('Saving...');
+  var invNum   = lastInvNum || document.getElementById('inv-num').value;
+  var date     = document.getElementById('inv-date').value;
+  var customer = document.getElementById('cust-name').value;
+  var total = 0;
+  for (var i = 0; i < items.length; i++) total += (parseFloat(items[i].qty)||1)*(parseFloat(items[i].price)||0);
+  var gst     = total - total/1.1;
+  var depAmt  = payStatus==='deposit' ? (parseFloat(document.getElementById('deposit-amt').value)||0) : 0;
+  var paidAmt = payStatus==='paid'    ? (parseFloat(document.getElementById('paid-amt').value)||total) : 0;
+  var amtDue  = Math.max(0, total - depAmt - paidAmt);
+  var status  = payStatus==='paid'?'Paid in Full':payStatus==='deposit'?'Deposit Taken':'Unpaid';
+  var bank    = (document.getElementById('bank-select').value||'').toUpperCase();
+  var ts      = new Date().toLocaleString('en-AU');
+  var row     = [invNum, date, customer, total.toFixed(2), gst.toFixed(2), depAmt||'', paidAmt||'', amtDue.toFixed(2), status, bank, ts];
 
-function uploadToDrive() {
-  setDriveStatus('Uploading...');
-  var invNum = lastInvNum || document.getElementById('inv-num').value || 'Invoice';
-  var content = '<!DOCTYPE html><html><head><meta charset="UTF-8"/><style>body{font-family:Calibri,Arial,sans-serif}</style></head><body>' + document.getElementById('inv-out').innerHTML + '</body></html>';
-  var fileName = invNum + '.html';
-  // First search for existing file with same name
-  fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22'+encodeURIComponent(fileName)+'%22+and+trashed%3Dfalse&fields=files(id,name)', {
-    headers: {'Authorization': 'Bearer ' + driveToken}
-  }).then(function(r){ return r.json(); }).then(function(data){
-    var existingId = data.files && data.files.length > 0 ? data.files[0].id : null;
-    var url, method;
-    var body = '--foo\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify({name: fileName, mimeType: 'text/html'}) + '\r\n--foo\r\nContent-Type: text/html\r\n\r\n' + content + '\r\n--foo--';
-    if (existingId) {
-      // Overwrite existing file
-      url = 'https://www.googleapis.com/upload/drive/v3/files/' + existingId + '?uploadType=multipart';
-      method = 'PATCH';
-    } else {
-      // Create new file
-      url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-      method = 'POST';
-    }
-    return fetch(url, {
-      method: method,
-      headers: {'Authorization': 'Bearer ' + driveToken, 'Content-Type': 'multipart/related; boundary=foo'},
-      body: body
-    });
-  }).then(function(r){ return r.json(); }).then(function(data){
-    if (data.id) {
-      setDriveStatus('Saved: ' + fileName + ' \u2713', '#2e7d32');
-    } else {
-      setDriveStatus('Upload failed: ' + JSON.stringify(data.error), '#c0392b');
-    }
-  }).catch(function(e){
+  // Build clean HTML for PDF conversion
+  var pdf = '<!DOCTYPE html><html><head><meta charset="UTF-8"/><style>body{font-family:Arial,sans-serif;margin:1cm 1.5cm}</style></head><body>' + document.getElementById('inv-out').innerHTML + '</body></html>';
+
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    body: JSON.stringify({row: row, pdf: pdf}),
+    headers: {'Content-Type': 'application/json'}
+  }).then(function() {
+    setDriveStatus('Saved to Drive & Sheet \u2713', '#2e7d32');
+  }).catch(function(e) {
     setDriveStatus('Error: ' + e.message, '#c0392b');
   });
 }
 
-
-// ── GOOGLE DRIVE ──
-var driveToken = null;
-var lastInvNum = null;
-function showDriveSetup(){var s=document.getElementById('drive-setup');s.style.display=s.style.display==='none'?'block':'none';var sv=localStorage.getItem('g-client-id')||'';document.getElementById('g-client-id').value=sv;}
-function saveDriveSetup(){var id=document.getElementById('g-client-id').value.trim();if(!id){alert('Please enter a Client ID');return;}localStorage.setItem('g-client-id',id);document.getElementById('drive-setup').style.display='none';setDriveStatus('Client ID saved.');}
-function setDriveStatus(msg,color){var el=document.getElementById('drive-status');if(el){el.textContent=msg;el.style.color=color||'#666';}}
-function saveToDrive(){var clientId=localStorage.getItem('g-client-id');if(!clientId){showDriveSetup();setDriveStatus('Please set up your Client ID first.','#c0392b');return;}if(typeof google==='undefined'||!google.accounts){setDriveStatus('Google API not loaded.','#c0392b');return;}setDriveStatus('Signing in...');try{var tc=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:'https://www.googleapis.com/auth/drive.file',callback:function(r){if(r.error){setDriveStatus('Sign-in failed: '+r.error,'#c0392b');return;}driveToken=r.access_token;uploadToDrive();}});tc.requestAccessToken({prompt:''});}catch(e){setDriveStatus('Error: '+e.message,'#c0392b');}}
-function uploadToDrive(){setDriveStatus('Uploading...');var fn=(lastInvNum||'Invoice')+'.html';var content='<!DOCTYPE html><html><head><meta charset="UTF-8"/></head><body>'+document.getElementById('inv-out').innerHTML+'</body></html>';var meta=JSON.stringify({name:fn,mimeType:'text/html'});var body='--x\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+meta+'\r\n--x\r\nContent-Type: text/html\r\n\r\n'+content+'\r\n--x--';fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+driveToken,'Content-Type':'multipart/related; boundary=x'},body:body}).then(function(r){return r.json();}).then(function(d){if(d.id){setDriveStatus('Saved: '+fn+' ✓','#2e7d32');}else{setDriveStatus('Failed: '+(d.error&&d.error.message||JSON.stringify(d)),'#c0392b');}}).catch(function(e){setDriveStatus('Error: '+e.message,'#c0392b');});}
 </script>
 </body>
 </html>
