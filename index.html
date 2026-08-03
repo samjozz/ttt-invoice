@@ -509,11 +509,14 @@ function saveToDrive() {
 
   fetch(APPS_SCRIPT_URL, {
     method: 'POST',
-    mode: 'no-cors',
     body: JSON.stringify({row: row, pdf: pdf}),
-    headers: {'Content-Type': 'application/json'}
-  }).then(function() {
-    setDriveStatus('Saved to Drive & Sheet \u2713', '#2e7d32');
+    headers: {'Content-Type': 'text/plain'}
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.success) {
+      setDriveStatus('Saved to Drive & Sheet \u2713', '#2e7d32');
+    } else {
+      setDriveStatus('Error: ' + (d.error||'unknown'), '#c0392b');
+    }
   }).catch(function(e) {
     setDriveStatus('Error: ' + e.message, '#c0392b');
   });
