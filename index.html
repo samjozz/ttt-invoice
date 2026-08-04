@@ -514,7 +514,13 @@ function saveToDrive() {
       body: JSON.stringify({row: row, pdfBase64: pdfBase64, fileName: invNum + '.pdf'}),
       headers: {'Content-Type': 'text/plain'}
     });
-  }).then(function(r){ return r.json(); }).then(function(d) {
+  }).then(function(r){
+    var contentType = r.headers.get('content-type') || '';
+    if (contentType.indexOf('json') === -1) {
+      return r.text().then(function(t){ throw new Error('Script returned non-JSON: ' + t.substring(0,120)); });
+    }
+    return r.json();
+  }).then(function(d) {
     if (d.success) {
       setDriveStatus('Saved to Drive & Sheet \u2713', '#2e7d32');
     } else {
