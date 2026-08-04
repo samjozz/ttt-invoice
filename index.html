@@ -337,19 +337,13 @@ window.addEventListener('beforeprint', function() {
 
 
 // ── DOWNLOAD PDF ──
-function downloadPDF() {
-  var btn = document.getElementById('dl-btn');
-  btn.textContent = 'Generating...';
-  btn.disabled = true;
-
-  // Clone into a hidden fixed-width container — never mutate the visible invoice
+function buildInvoiceClone() {
   var inv = document.getElementById('inv-out');
   var clone = inv.cloneNode(true);
   var wrap = document.createElement('div');
   wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff';
   wrap.appendChild(clone);
   document.body.appendChild(wrap);
-
   clone.style.cssText = 'border:none;border-radius:0;overflow:visible;width:794px;background:#fff';
   var bar = clone.querySelector('.inv-bar');
   if (bar) bar.style.cssText = 'height:12px;background:#c8a84b;width:100%;display:block;margin:0;padding:0';
@@ -367,41 +361,49 @@ function downloadPDF() {
   if (tw) tw.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:1.5rem';
   var tt = clone.querySelector('.inv-tt');
   if (tt) tt.style.cssText = 'width:300px;font-size:13px';
+  return wrap;
+}
 
-  html2canvas(wrap, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: '#ffffff',
-    width: 794,
-    windowWidth: 794
+function generatePDFBase64() {
+  var wrap = buildInvoiceClone();
+  return html2canvas(wrap, {
+    scale: 2, useCORS: true, allowTaint: true,
+    backgroundColor: '#ffffff', width: 794, windowWidth: 794
   }).then(function(canvas) {
     document.body.removeChild(wrap);
-
-
-
     var imgData = canvas.toDataURL('image/jpeg', 0.97);
     var pdf = new jspdf.jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
     var pageW = pdf.internal.pageSize.getWidth();
     var pageH = pdf.internal.pageSize.getHeight();
-
-    // Scale image to fit page width
     var imgW = pageW;
     var imgH = (canvas.height * pageW) / canvas.width;
+    if (imgH > pageH) { var s = pageH/imgH; imgW *= s; imgH = pageH; }
+    pdf.addImage(imgData, 'JPEG', (pageW-imgW)/2, 0, imgW, imgH);
+    // Return base64 string (strip the data:application/pdf;base64, prefix)
+    return pdf.output('datauristring').split(',')[1];
+  });
+}
 
-    // If taller than a page, scale down to fit
-    if (imgH > pageH) {
-      var scale = pageH / imgH;
-      imgW = imgW * scale;
-      imgH = pageH;
-    }
-
-    var xOff = (pageW - imgW) / 2;
-    pdf.addImage(imgData, 'JPEG', xOff, 0, imgW, imgH);
-
+function downloadPDF() {
+  var btn = document.getElementById('dl-btn');
+  btn.textContent = 'Generating...';
+  btn.disabled = true;
+  var wrap = buildInvoiceClone();
+  html2canvas(wrap, {
+    scale: 2, useCORS: true, allowTaint: true,
+    backgroundColor: '#ffffff', width: 794, windowWidth: 794
+  }).then(function(canvas) {
+    document.body.removeChild(wrap);
+    var imgData = canvas.toDataURL('image/jpeg', 0.97);
+    var pdf = new jspdf.jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+    var pageW = pdf.internal.pageSize.getWidth();
+    var pageH = pdf.internal.pageSize.getHeight();
+    var imgW = pageW;
+    var imgH = (canvas.height * pageW) / canvas.width;
+    if (imgH > pageH) { var s = pageH/imgH; imgW *= s; imgH = pageH; }
+    pdf.addImage(imgData, 'JPEG', (pageW-imgW)/2, 0, imgW, imgH);
     var invNum = lastInvNum || document.getElementById('inv-num').value || 'Invoice';
     pdf.save(invNum + '.pdf');
-
     btn.textContent = 'Download PDF';
     btn.disabled = false;
   }).catch(function(e) {
@@ -489,7 +491,7 @@ function setDriveStatus(msg, color) {
 }
 
 function saveToDrive() {
-  setDriveStatus('Saving...');
+  setDriveStatus('Generating PDF...');
   var invNum   = lastInvNum || document.getElementById('inv-num').value;
   var date     = document.getElementById('inv-date').value;
   var customer = document.getElementById('cust-name').value;
@@ -504,13 +506,14 @@ function saveToDrive() {
   var ts      = new Date().toLocaleString('en-AU');
   var row     = [invNum, date, customer, total.toFixed(2), gst.toFixed(2), depAmt||'', paidAmt||'', amtDue.toFixed(2), status, bank, ts];
 
-  // Build clean HTML for PDF conversion
-  var pdf = '<!DOCTYPE html><html><head><meta charset="UTF-8"/><style>body{font-family:Arial,sans-serif;margin:1cm 1.5cm}</style></head><body>' + document.getElementById('inv-out').innerHTML + '</body></html>';
-
-  fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({row: row, pdf: pdf}),
-    headers: {'Content-Type': 'text/plain'}
+  // Generate PDF in browser (same as Download PDF) then send base64 to Apps Script
+  generatePDFBase64().then(function(pdfBase64) {
+    setDriveStatus('Saving...');
+    return fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({row: row, pdfBase64: pdfBase64, fileName: invNum + '.pdf'}),
+      headers: {'Content-Type': 'text/plain'}
+    });
   }).then(function(r){ return r.json(); }).then(function(d) {
     if (d.success) {
       setDriveStatus('Saved to Drive & Sheet \u2713', '#2e7d32');
